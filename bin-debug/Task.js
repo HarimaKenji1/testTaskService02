@@ -6,27 +6,43 @@ var TaskStatus;
     TaskStatus[TaskStatus["CAN_SUBMIT"] = 3] = "CAN_SUBMIT";
     TaskStatus[TaskStatus["SUBMITTED"] = 4] = "SUBMITTED";
 })(TaskStatus || (TaskStatus = {}));
-/*
-interface TaskConditionContext {
-    getCurrent();
-    setCurrent(n: number);
-}*/
-var Task /* extends TaskEmitter implements TaskConditionContext*/ = (function () {
-    function Task /* extends TaskEmitter implements TaskConditionContext*/(id, name, desc, total, status, /* taskcondition: TaskCondition,*/ fromNpcId, toNpcId) {
+var TaskEmitter = (function () {
+    function TaskEmitter() {
+        this.observerList = [];
+    }
+    var d = __define,c=TaskEmitter,p=c.prototype;
+    // constructor(){
+    //     this.observerList = [];
+    // }
+    p.addObserver = function (o) {
+        this.observerList.push(o);
+    };
+    p.notify = function (task) {
+        for (var _i = 0, _a = this.observerList; _i < _a.length; _i++) {
+            var observer = _a[_i];
+            observer.onChange(task);
+        }
+    };
+    return TaskEmitter;
+}());
+egret.registerClass(TaskEmitter,'TaskEmitter');
+var Task = (function (_super) {
+    __extends(Task, _super);
+    function Task(id, name, desc, total, status, taskcondition, fromNpcId, toNpcId) {
+        _super.call(this);
         this.current = 0;
         this.total = 100;
-        //super();
         this.id = id;
         this.name = name;
         this.desc = desc;
         this.status = status;
         this.total = total;
-        //this.taskCondition = taskcondition;
+        this.taskCondition = taskcondition;
         this.fromNpcId = fromNpcId;
         this.toNpcId = toNpcId;
+        this.addObserver(TaskService.getInstance());
     }
     var d = __define,c=Task,p=c.prototype;
-    //private taskCondition: TaskCondition;
     p.getCurrent = function () {
         return this.current;
     };
@@ -39,64 +55,38 @@ var Task /* extends TaskEmitter implements TaskConditionContext*/ = (function ()
             this.status = TaskStatus.CAN_SUBMIT;
         }
     };
-    return Task /* extends TaskEmitter implements TaskConditionContext*/;
+    return Task;
+}(TaskEmitter));
+egret.registerClass(Task,'Task',["TaskConditionContext"]);
+var NPCTalkTaskCondition = (function () {
+    function NPCTalkTaskCondition() {
+    }
+    var d = __define,c=NPCTalkTaskCondition,p=c.prototype;
+    p.onAccept = function (task) { };
+    p.onSubmit = function (task) { };
+    p.updateProccess = function (task, num) {
+        task.setCurrent(num);
+    };
+    return NPCTalkTaskCondition;
 }());
-egret.registerClass(Task /* extends TaskEmitter implements TaskConditionContext*/,'Task');
-/*
-class TaskCondition {
-    constructor() { }
-    onAccept(task) { }
-    onSubmit(task) { }
-    updateProccess(task, num) { }
-}
-
-class NPCTalkTaskCondition extends TaskCondition {
-    constructor() {
-        super();
+egret.registerClass(NPCTalkTaskCondition,'NPCTalkTaskCondition',["TaskCondition"]);
+var KillMonsterTaskCondition = (function () {
+    function KillMonsterTaskCondition() {
     }
-    // onAccept(task){}
-    // onSubmit(task){}
-    public updateProccess(task: TaskConditionContext, num: number) {
+    var d = __define,c=KillMonsterTaskCondition,p=c.prototype;
+    p.onAccept = function (task) { };
+    p.onSubmit = function (task) { };
+    p.updateProccess = function (task, num) {
         task.setCurrent(num);
-    }
-}
-
-class KillMonsterTaskCondition extends TaskCondition {
-    constructor() {
-        super();
-    }
-    onAccept(task) { }
-    onSubmit(task) { }
-    public updateProccess(task: TaskConditionContext, num: number) {
-        task.setCurrent(num);
-    }
-}
-
-class TaskEmitter {
-    private observerList: Observer[];
-
-    constructor(){
-        this.observerList = [];
-    }
-    public addObserver(o: Observer) {
-        this.observerList.push(o);
-    }
-
-    public notify(task: Task) {
-        for (var observer of this.observerList) {
-            observer.onChange(task);
-        }
-    }
-}
-
-
-interface Observer {
-    onChange(task: Task);
-}
-
-*/
-var TaskService /*extends TaskEmitter implements Observer*/ = (function () {
-    function TaskService /*extends TaskEmitter implements Observer*/() {
+    };
+    return KillMonsterTaskCondition;
+}());
+egret.registerClass(KillMonsterTaskCondition,'KillMonsterTaskCondition',["TaskCondition"]);
+var TaskService = (function (_super) {
+    __extends(TaskService, _super);
+    function TaskService() {
+        _super.apply(this, arguments);
+        this.taskList = {};
     }
     var d = __define,c=TaskService,p=c.prototype;
     TaskService.getInstance = function () {
@@ -104,9 +94,6 @@ var TaskService /*extends TaskEmitter implements Observer*/ = (function () {
             TaskService.instance = new TaskService();
         }
         return TaskService.instance;
-    };
-    p.loadTasks = function () {
-        this.taskList = {};
     };
     //private observerList : Observer[] = [];
     p.addTask = function (task) {
@@ -149,11 +136,34 @@ var TaskService /*extends TaskEmitter implements Observer*/ = (function () {
     // }
     p.onChange = function (task) {
         this.taskList[task.id] = task;
-        //this.notify(this.taskList[task.id]);
+        this.notify(this.taskList[task.id]);
     };
-    return TaskService /*extends TaskEmitter implements Observer*/;
-}());
-egret.registerClass(TaskService /*extends TaskEmitter implements Observer*/,'TaskService');
+    return TaskService;
+}(TaskEmitter));
+egret.registerClass(TaskService,'TaskService',["Observer"]);
+function creatTaskCondition(id) {
+    if (id == "npctalk") {
+        var n = new NPCTalkTaskCondition();
+        return n;
+    }
+    else if (id == "killmonster") {
+        var k = new KillMonsterTaskCondition();
+        return k;
+    }
+    else
+        console.error('missing task condition');
+}
+function creatTask(id) {
+    var data = {
+        "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.UNACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1" },
+    };
+    var info = data[id];
+    if (!info) {
+        console.error('missing task');
+    }
+    var condition = this.creatTaskCondition(info.condition);
+    return new Task(id, info.name, info.desc, info.total, info.status, condition, info.fronNpcId, info.toNpcId);
+}
 var TaskPanel = (function (_super) {
     __extends(TaskPanel, _super);
     function TaskPanel() {
@@ -251,5 +261,5 @@ var TaskPanel = (function (_super) {
     };
     return TaskPanel;
 }(egret.DisplayObjectContainer));
-egret.registerClass(TaskPanel,'TaskPanel');
+egret.registerClass(TaskPanel,'TaskPanel',["Observer"]);
 //# sourceMappingURL=Task.js.map

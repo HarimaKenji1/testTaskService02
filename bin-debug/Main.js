@@ -140,8 +140,9 @@ var Main = (function (_super) {
         var stageH = this.stage.stageHeight;
         this.map01 = new TileMap();
         this.addChild(this.map01);
+        TaskService.getInstance();
         //TaskService.getInstance().init();
-        /*this.task01 = */ TaskService.getInstance(); //.creatTask("task_00")
+        this.task01 = creatTask("task_00");
         TaskService.getInstance().addTask(this.task01);
         this.taskPanel = new TaskPanel();
         // TaskService.getInstance().addObserver(this.taskPanel);

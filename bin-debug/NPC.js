@@ -155,7 +155,7 @@ var NPC = (function (_super) {
     };
     return NPC;
 }(egret.DisplayObjectContainer));
-egret.registerClass(NPC,'NPC');
+egret.registerClass(NPC,'NPC',["Observer"]);
 var DialoguePanel = (function (_super) {
     __extends(DialoguePanel, _super);
     function DialoguePanel() {

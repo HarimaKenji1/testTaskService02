@@ -12,6 +12,23 @@ interface TaskConditionContext {
     setCurrent(n: number);
 }
 
+class TaskEmitter {
+    public observerList: Observer[] = [];
+
+    // constructor(){
+    //     this.observerList = [];
+    // }
+    public addObserver(o: Observer) {
+        this.observerList.push(o);
+    }
+
+    public notify(task: Task) {
+        for (var observer of this.observerList) {
+            observer.onChange(task);
+        }
+    }
+}
+
 class Task extends TaskEmitter implements TaskConditionContext {
 
     public id: string;
@@ -50,6 +67,8 @@ class Task extends TaskEmitter implements TaskConditionContext {
         this.taskCondition = taskcondition;
         this.fromNpcId = fromNpcId;
         this.toNpcId = toNpcId;
+        this.addObserver(TaskService.getInstance());
+        
 
     }
 
@@ -80,28 +99,22 @@ class Task extends TaskEmitter implements TaskConditionContext {
 }
 
 
-class TaskCondition {
-    constructor() { }
-    onAccept(task) { }
-    onSubmit(task) { }
-    updateProccess(task, num) { }
+interface TaskCondition {
+    onAccept(task);
+    onSubmit(task);
+    updateProccess(task, num);
 }
 
-class NPCTalkTaskCondition extends TaskCondition {
-    constructor() {
-        super();
-    }
-    // onAccept(task){}
-    // onSubmit(task){}
+class NPCTalkTaskCondition implements TaskCondition {
+    onAccept(task){}
+    onSubmit(task){}
     public updateProccess(task: TaskConditionContext, num: number) {
         task.setCurrent(num);
     }
 }
 
-class KillMonsterTaskCondition extends TaskCondition {
-    constructor() {
-        super();
-    }
+class KillMonsterTaskCondition implements TaskCondition {
+    
     onAccept(task) { }
     onSubmit(task) { }
     public updateProccess(task: TaskConditionContext, num: number) {
@@ -109,22 +122,7 @@ class KillMonsterTaskCondition extends TaskCondition {
     }
 }
 
-class TaskEmitter {
-    private observerList: Observer[];
 
-    constructor(){
-        this.observerList = [];
-    }
-    public addObserver(o: Observer) {
-        this.observerList.push(o);
-    }
-
-    public notify(task: Task) {
-        for (var observer of this.observerList) {
-            observer.onChange(task);
-        }
-    }
-}
 
 
 interface Observer {
@@ -137,7 +135,7 @@ class TaskService extends TaskEmitter implements Observer {
     private static instance;
     private taskList: {
         [index: string]: Task
-    };
+    } = {};
     static getInstance(): TaskService {
         if (TaskService.instance == null) {
             TaskService.instance = new TaskService();
@@ -146,9 +144,6 @@ class TaskService extends TaskEmitter implements Observer {
         return TaskService.instance;
     }
 
-    loadTasks() {
-        this.taskList = {};
-    }
     //private observerList : Observer[] = [];
 
 
@@ -200,7 +195,7 @@ class TaskService extends TaskEmitter implements Observer {
 
     public onChange(task: Task) {
         this.taskList[task.id] = task;
-        //this.notify(this.taskList[task.id]);
+        this.notify(this.taskList[task.id]);
     }
 
     // public init(){
@@ -215,7 +210,10 @@ class TaskService extends TaskEmitter implements Observer {
     // }
 
 
-    creatTaskCondition(id: string) {
+    
+}
+
+function creatTaskCondition(id: string) {
         if (id == "npctalk") {
             var n = new NPCTalkTaskCondition();
             return n;
@@ -228,7 +226,7 @@ class TaskService extends TaskEmitter implements Observer {
             console.error('missing task condition')
     }
 
-    creatTask(id: string) {
+    function creatTask(id: string) {
         var data = {
             "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.UNACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1" },
         }
@@ -239,9 +237,6 @@ class TaskService extends TaskEmitter implements Observer {
         var condition = this.creatTaskCondition(info.condition);
         return new Task(id, info.name, info.desc, info.total, info.status, condition, info.fronNpcId, info.toNpcId);
     }
-}
-
-
 
 class TaskPanel extends egret.DisplayObjectContainer implements Observer {
 

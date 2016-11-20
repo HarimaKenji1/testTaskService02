@@ -152,7 +152,7 @@ class Main extends egret.DisplayObjectContainer {
     private playerBitY : number;
     private task01 : Task;
     //private task02 : Task = new Task("task_");
-    private taskService : TaskService;
+    private taskService : TaskService /*= TaskService.getInstance() */;
     private taskPanel : TaskPanel;
     private NPC01 : NPC;
     private NPC02 : NPC;
@@ -179,9 +179,9 @@ class Main extends egret.DisplayObjectContainer {
         this.map01 = new TileMap();
         this.addChild(this.map01);
 
-        
+        TaskService.getInstance();
         //TaskService.getInstance().init();
-        /*this.task01 = */TaskService.getInstance();//.creatTask("task_00")
+        this.task01 = creatTask("task_00")
         TaskService.getInstance().addTask(this.task01);
         this.taskPanel = new TaskPanel();
        // TaskService.getInstance().addObserver(this.taskPanel);
