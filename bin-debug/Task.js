@@ -6,11 +6,11 @@ var TaskStatus;
     TaskStatus[TaskStatus["CAN_SUBMIT"] = 3] = "CAN_SUBMIT";
     TaskStatus[TaskStatus["SUBMITTED"] = 4] = "SUBMITTED";
 })(TaskStatus || (TaskStatus = {}));
-var TaskEmitter = (function () {
-    function TaskEmitter() {
+var EventEmitter = (function () {
+    function EventEmitter() {
         this.observerList = [];
     }
-    var d = __define,c=TaskEmitter,p=c.prototype;
+    var d = __define,c=EventEmitter,p=c.prototype;
     // constructor(){
     //     this.observerList = [];
     // }
@@ -23,15 +23,16 @@ var TaskEmitter = (function () {
             observer.onChange(task);
         }
     };
-    return TaskEmitter;
+    return EventEmitter;
 }());
-egret.registerClass(TaskEmitter,'TaskEmitter');
+egret.registerClass(EventEmitter,'EventEmitter');
 var Task = (function (_super) {
     __extends(Task, _super);
-    function Task(id, name, desc, total, status, taskcondition, fromNpcId, toNpcId) {
+    function Task(id, name, desc, total, status, taskcondition, conditiontype, fromNpcId, toNpcId, preTaskListId) {
         _super.call(this);
         this.current = 0;
         this.total = 100;
+        this.preTaskListId = [];
         this.id = id;
         this.name = name;
         this.desc = desc;
@@ -40,6 +41,8 @@ var Task = (function (_super) {
         this.taskCondition = taskcondition;
         this.fromNpcId = fromNpcId;
         this.toNpcId = toNpcId;
+        this.conditionType = conditiontype;
+        this.preTaskListId = preTaskListId;
         this.addObserver(TaskService.getInstance());
     }
     var d = __define,c=Task,p=c.prototype;
@@ -52,18 +55,56 @@ var Task = (function (_super) {
     };
     p.checkStatus = function () {
         if (this.current >= this.total) {
-            this.status = TaskStatus.CAN_SUBMIT;
+            TaskService.getInstance().canFinish(this.id);
+            this.notify(this);
+        }
+    };
+    p.onChange = function (task) {
+        if (this.id == task.id) {
+            this.updateProccess(1);
+        }
+    };
+    // public getCondition(){
+    //     return this.taskCondition;
+    // }
+    p.canAccept = function () {
+        if (this.status == TaskStatus.UNACCEPTABLE) {
+            this.status = TaskStatus.ACCEPTABLE;
+            this.notify(this);
+        }
+    };
+    ;
+    p.accept = function () {
+        if (this.status == TaskStatus.ACCEPTABLE) {
+            this.status = TaskStatus.DURING;
+            this.notify(this);
+        }
+    };
+    ;
+    p.submit = function () {
+        if (this.status == TaskStatus.CAN_SUBMIT) {
+            this.status = TaskStatus.SUBMITTED;
+            this.notify(this);
+        }
+    };
+    ;
+    p.updateProccess = function (n) {
+        if (this.status == TaskStatus.DURING) {
+            this.taskCondition.updateProccess(this, n);
         }
     };
     return Task;
-}(TaskEmitter));
-egret.registerClass(Task,'Task',["TaskConditionContext"]);
+}(EventEmitter));
+egret.registerClass(Task,'Task',["TaskConditionContext","Observer"]);
 var NPCTalkTaskCondition = (function () {
     function NPCTalkTaskCondition() {
     }
     var d = __define,c=NPCTalkTaskCondition,p=c.prototype;
-    p.onAccept = function (task) { };
+    p.canAccept = function (task) { };
     p.onSubmit = function (task) { };
+    p.getCondition = function () {
+        return this;
+    };
     p.updateProccess = function (task, num) {
         task.setCurrent(num);
     };
@@ -76,6 +117,9 @@ var KillMonsterTaskCondition = (function () {
     var d = __define,c=KillMonsterTaskCondition,p=c.prototype;
     p.onAccept = function (task) { };
     p.onSubmit = function (task) { };
+    p.getCondition = function () {
+        return this;
+    };
     p.updateProccess = function (task, num) {
         task.setCurrent(num);
     };
@@ -109,25 +153,25 @@ var TaskService = (function (_super) {
         if (this.taskList[id].status == TaskStatus.CAN_SUBMIT) {
             this.taskList[id].status = TaskStatus.SUBMITTED;
         }
-        // this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     };
     p.accept = function (id) {
         if (this.taskList[id].status == TaskStatus.ACCEPTABLE) {
             this.taskList[id].status = TaskStatus.DURING;
         }
-        //this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     };
     p.canAccept = function (id) {
         if (this.taskList[id].status == TaskStatus.UNACCEPTABLE) {
             this.taskList[id].status = TaskStatus.ACCEPTABLE;
         }
-        // this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     };
     p.canFinish = function (id) {
         if (this.taskList[id].status == TaskStatus.DURING) {
             this.taskList[id].status = TaskStatus.CAN_SUBMIT;
         }
-        // this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     };
     // public notify(task : Task){
     //     for(var observer of this.observerList){
@@ -137,32 +181,58 @@ var TaskService = (function (_super) {
     p.onChange = function (task) {
         this.taskList[task.id] = task;
         this.notify(this.taskList[task.id]);
+        for (var taskId in this.taskList) {
+            if (this.taskList[taskId].status == TaskStatus.UNACCEPTABLE) {
+                var canAccept = true;
+                for (var _i = 0, _a = this.taskList[taskId].preTaskListId; _i < _a.length; _i++) {
+                    var preId = _a[_i];
+                    if (preId != "null") {
+                        if (this.taskList[preId].status != TaskStatus.SUBMITTED) {
+                            canAccept = false;
+                            break;
+                        }
+                    }
+                }
+                if (canAccept) {
+                    this.canAccept(taskId);
+                }
+            }
+        }
     };
     return TaskService;
-}(TaskEmitter));
+}(EventEmitter));
 egret.registerClass(TaskService,'TaskService',["Observer"]);
 function creatTaskCondition(id) {
-    if (id == "npctalk") {
-        var n = new NPCTalkTaskCondition();
-        return n;
+    var data = {
+        "npctalk": { condition: new NPCTalkTaskCondition() },
+        "killmonster": { condition: new KillMonsterTaskCondition() }
+    };
+    // if (id == "npctalk") {
+    //     var n = new NPCTalkTaskCondition();
+    //     return n;
+    // }
+    // else if (id == "killmonster") {
+    //     var k = new KillMonsterTaskCondition();
+    //     return k;
+    // }
+    // else
+    var info = data[id];
+    if (!info) {
+        console.error('missing task');
     }
-    else if (id == "killmonster") {
-        var k = new KillMonsterTaskCondition();
-        return k;
-    }
-    else
-        console.error('missing task condition');
+    return info.condition;
 }
 function creatTask(id) {
     var data = {
-        "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.UNACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1" },
+        "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.ACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1", preTaskListId: ["null"] },
+        "task_01": { name: "任务02", desc: "点击NPC_2,杀死十只怪物后点NPC_2交任务", total: 10, status: TaskStatus.UNACCEPTABLE, condition: "killmonster", fromNpcId: "npc_1", toNpcId: "npc_1", preTaskListId: ["task_00"] },
     };
     var info = data[id];
     if (!info) {
         console.error('missing task');
     }
     var condition = this.creatTaskCondition(info.condition);
-    return new Task(id, info.name, info.desc, info.total, info.status, condition, info.fronNpcId, info.toNpcId);
+    return new Task(id, info.name, info.desc, info.total, info.status, condition, info.condition, info.fromNpcId, info.toNpcId, info.preTaskListId);
 }
 var TaskPanel = (function (_super) {
     __extends(TaskPanel, _super);
@@ -205,7 +275,7 @@ var TaskPanel = (function (_super) {
             }
         };
         TaskService.getInstance().getTaskByCustomRule(rule);
-        // this.taskList = rule;
+        //this.taskList = rule;
         // for(var i = 0; i < this.taskList.length; i++){
         //     this.show[i] ="任务名 ：" + this.taskList[i].name + ":\n" +"任务内容："+ this.taskList[i].desc +" :\n" +" 任务状态 ：" + this.taskList[i].status;
         // }
@@ -227,6 +297,7 @@ var TaskPanel = (function (_super) {
         var rule = function (taskList) {
             for (var taskId in taskList) {
                 _this.taskList[i] = taskList[taskId];
+                i++;
             }
         };
         TaskService.getInstance().getTaskByCustomRule(rule);
@@ -234,14 +305,16 @@ var TaskPanel = (function (_super) {
             if (this.taskList[i].id == task.id) {
                 egret.Tween.get(this).to({ alpha: 1 }, 500);
                 //this.button.touchEnabled = true;
-                if (this.taskList[i].status == TaskStatus.ACCEPTABLE) {
-                    this.ifAccept = true;
-                    var texture = RES.getRes("jieshou_png");
-                }
-                if (this.taskList[i].status == TaskStatus.CAN_SUBMIT) {
-                    this.ifAccept = false;
-                    var texture = RES.getRes("wancheng_png");
-                }
+                // if (this.taskList[i].status == TaskStatus.ACCEPTABLE) {
+                //     this.ifAccept = true;
+                //     var texture: egret.Texture = RES.getRes("jieshou_png");
+                //     //this.button.texture = texture;
+                // }
+                // if (this.taskList[i].status == TaskStatus.CAN_SUBMIT) {
+                //     this.ifAccept = false;
+                //     var texture: egret.Texture = RES.getRes("wancheng_png");
+                //     //this.button.texture = texture;
+                // }
                 this.show[i] = "任务名 ：" + this.taskList[i].name + " :\n " + "任务内容：" + this.taskList[i].desc + " :\n " + " 任务状态 ： " + this.taskList[i].status;
                 this.duringTaskId = this.taskList[i].id;
                 this.textField.text = "";

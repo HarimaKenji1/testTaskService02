@@ -144,15 +144,25 @@ var Main = (function (_super) {
         //TaskService.getInstance().init();
         this.task01 = creatTask("task_00");
         TaskService.getInstance().addTask(this.task01);
+        TaskService.getInstance().addTask(creatTask("task_01"));
         this.taskPanel = new TaskPanel();
-        // TaskService.getInstance().addObserver(this.taskPanel);
+        TaskService.getInstance().addObserver(this.taskPanel);
         this.addChild(this.taskPanel);
         this.taskPanel.x = this.stage.width - this.taskPanel.width;
         this.taskPanel.y = 0;
         this.NPC01 = new NPC("npc_0", "NPC_Man_01_png", this.Npc01Dialogue);
         this.NPC02 = new NPC("npc_1", "NPC_Man_02_png", this.Npc02Dialogue);
-        //TaskService.getInstance().addObserver(this.NPC01);
-        // TaskService.getInstance().addObserver(this.NPC02);
+        TaskService.getInstance().addObserver(this.NPC01);
+        TaskService.getInstance().addObserver(this.NPC02);
+        this.screenService = new ScreenService();
+        var slime = this.createBitmapByName("Slime_png");
+        this.addChild(slime);
+        slime.x = 64 * 5;
+        slime.y = 64 * 4;
+        slime.touchEnabled = true;
+        slime.addEventListener(egret.TouchEvent.TOUCH_TAP, function (e) {
+            _this.screenService.monsterBeenKilled("task_01");
+        }, this);
         this.addChild(this.NPC01);
         this.NPC01.x = 128;
         this.NPC01.y = 128;

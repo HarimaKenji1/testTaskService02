@@ -159,6 +159,7 @@ class Main extends egret.DisplayObjectContainer {
     private Npc01Dialogue : string[] = ["你好我是NPC01"]
     private Npc02Dialogue : string[] = ["你好我是NPC02"]
     private dialoguePanel : DialoguePanel; 
+    private screenService :ScreenService;
 
     
     /**
@@ -181,10 +182,13 @@ class Main extends egret.DisplayObjectContainer {
 
         TaskService.getInstance();
         //TaskService.getInstance().init();
+        
+        
         this.task01 = creatTask("task_00")
         TaskService.getInstance().addTask(this.task01);
+        TaskService.getInstance().addTask(creatTask("task_01"));
         this.taskPanel = new TaskPanel();
-       // TaskService.getInstance().addObserver(this.taskPanel);
+        TaskService.getInstance().addObserver(this.taskPanel);
         
 
         
@@ -193,14 +197,23 @@ class Main extends egret.DisplayObjectContainer {
         this.taskPanel.y = 0;
 
         
-        
-        
 
 
         this.NPC01 = new NPC("npc_0","NPC_Man_01_png",this.Npc01Dialogue);
         this.NPC02 = new NPC("npc_1","NPC_Man_02_png",this.Npc02Dialogue);
-        //TaskService.getInstance().addObserver(this.NPC01);
-       // TaskService.getInstance().addObserver(this.NPC02);
+        TaskService.getInstance().addObserver(this.NPC01);
+        TaskService.getInstance().addObserver(this.NPC02);
+
+        this.screenService = new ScreenService();
+        var slime = this.createBitmapByName("Slime_png");
+        this.addChild(slime);
+        slime.x = 64 * 5;
+        slime.y = 64 * 4;
+        slime.touchEnabled = true;
+
+        slime.addEventListener(egret.TouchEvent.TOUCH_TAP,(e : egret.TouchEvent)=>{
+            this.screenService.monsterBeenKilled("task_01");
+        },this)
 
 
         this.addChild(this.NPC01);
@@ -228,7 +241,7 @@ class Main extends egret.DisplayObjectContainer {
 
          this.astar = new AStar();
 
-
+         
        
 
         //根据name关键字，异步获取一个json配置文件，name属性请参考resources/resource.json配置文件的内容。

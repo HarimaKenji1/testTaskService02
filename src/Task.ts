@@ -10,9 +10,14 @@ enum TaskStatus {
 interface TaskConditionContext {
     getCurrent();
     setCurrent(n: number);
+    canAccept();
+    accept();
+    submit();
+    updateProccess(n : number);
+
 }
 
-class TaskEmitter {
+class EventEmitter {
     public observerList: Observer[] = [];
 
     // constructor(){
@@ -29,7 +34,7 @@ class TaskEmitter {
     }
 }
 
-class Task extends TaskEmitter implements TaskConditionContext {
+class Task extends EventEmitter implements TaskConditionContext,Observer {
 
     public id: string;
     public name: string;
@@ -39,6 +44,8 @@ class Task extends TaskEmitter implements TaskConditionContext {
     public toNpcId: string;
     public current = 0;
     public total = 100;
+    public conditionType : string;
+    public preTaskListId : string[] = [];
     private taskCondition: TaskCondition;
 
 
@@ -51,13 +58,48 @@ class Task extends TaskEmitter implements TaskConditionContext {
     }
     private checkStatus() {
         if (this.current >= this.total) {
-            this.status = TaskStatus.CAN_SUBMIT;
+            TaskService.getInstance().canFinish(this.id);
+            this.notify(this);
+        }
+    }
+
+    public onChange(task : Task){
+        if(this.id == task.id){
+            this.updateProccess(1);
+        }
+    }
+    // public getCondition(){
+    //     return this.taskCondition;
+    // }
+    public canAccept(){
+        if(this.status == TaskStatus.UNACCEPTABLE){
+            this.status = TaskStatus.ACCEPTABLE;
+            this.notify(this);
+        }
+    };
+    public accept(){
+        if(this.status == TaskStatus.ACCEPTABLE){
+            this.status = TaskStatus.DURING;
+            this.notify(this);
+        }
+    };
+    public submit(){
+        if(this.status == TaskStatus.CAN_SUBMIT){
+            this.status = TaskStatus.SUBMITTED;
+            this.notify(this);
+        }
+    };
+
+
+    public updateProccess(n : number){
+        if(this.status == TaskStatus.DURING){
+        this.taskCondition.updateProccess(this,n);
         }
     }
 
     constructor(id: string, name: string, desc: string,
-     total: number, status: TaskStatus, taskcondition: TaskCondition,
-      fromNpcId: string, toNpcId: string) {
+     total: number, status: TaskStatus, taskcondition: TaskCondition,conditiontype,
+      fromNpcId: string, toNpcId: string,preTaskListId : string[]) {
         super();
         this.id = id;
         this.name = name;
@@ -67,6 +109,8 @@ class Task extends TaskEmitter implements TaskConditionContext {
         this.taskCondition = taskcondition;
         this.fromNpcId = fromNpcId;
         this.toNpcId = toNpcId;
+        this.conditionType = conditiontype;
+        this.preTaskListId = preTaskListId;
         this.addObserver(TaskService.getInstance());
         
 
@@ -100,14 +144,19 @@ class Task extends TaskEmitter implements TaskConditionContext {
 
 
 interface TaskCondition {
-    onAccept(task);
-    onSubmit(task);
+    // canAccept(task);
+    // accept(task);
+    // submit(task);
+    // getCondition();
     updateProccess(task, num);
 }
 
 class NPCTalkTaskCondition implements TaskCondition {
-    onAccept(task){}
+    canAccept(task : TaskCondition){}
     onSubmit(task){}
+    getCondition(){
+        return this;
+    }
     public updateProccess(task: TaskConditionContext, num: number) {
         task.setCurrent(num);
     }
@@ -117,6 +166,9 @@ class KillMonsterTaskCondition implements TaskCondition {
     
     onAccept(task) { }
     onSubmit(task) { }
+    getCondition(){
+        return this;
+    }
     public updateProccess(task: TaskConditionContext, num: number) {
         task.setCurrent(num);
     }
@@ -130,7 +182,7 @@ interface Observer {
 }
 
 
-class TaskService extends TaskEmitter implements Observer {
+class TaskService extends EventEmitter implements Observer {
 
     private static instance;
     private taskList: {
@@ -163,28 +215,28 @@ class TaskService extends TaskEmitter implements Observer {
         if (this.taskList[id].status == TaskStatus.CAN_SUBMIT) {
             this.taskList[id].status = TaskStatus.SUBMITTED;
         }
-       // this.notify(this.taskList[id]);
+       this.notify(this.taskList[id]);
     }
 
     public accept(id: string) {
         if (this.taskList[id].status == TaskStatus.ACCEPTABLE) {
             this.taskList[id].status = TaskStatus.DURING;
         }
-        //this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     }
 
     public canAccept(id: string) {
         if (this.taskList[id].status == TaskStatus.UNACCEPTABLE) {
             this.taskList[id].status = TaskStatus.ACCEPTABLE;
         }
-       // this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     }
 
     public canFinish(id: string) {
         if (this.taskList[id].status == TaskStatus.DURING) {
             this.taskList[id].status = TaskStatus.CAN_SUBMIT;
         }
-       // this.notify(this.taskList[id]);
+        this.notify(this.taskList[id]);
     }
 
     // public notify(task : Task){
@@ -196,6 +248,24 @@ class TaskService extends TaskEmitter implements Observer {
     public onChange(task: Task) {
         this.taskList[task.id] = task;
         this.notify(this.taskList[task.id]);
+        for(var taskId in this.taskList){
+            
+            if(this.taskList[taskId].status == TaskStatus.UNACCEPTABLE){
+               var canAccept = true;
+               for(var preId of this.taskList[taskId].preTaskListId){
+                if(preId != "null"){
+                   if(this.taskList[preId].status != TaskStatus.SUBMITTED ){
+                       canAccept = false;
+                      break;
+                      }
+                   }
+                   }
+                   if(canAccept){
+                    this.canAccept(taskId);
+                   }
+            }
+            
+        }
     }
 
     // public init(){
@@ -214,28 +284,38 @@ class TaskService extends TaskEmitter implements Observer {
 }
 
 function creatTaskCondition(id: string) {
-        if (id == "npctalk") {
-            var n = new NPCTalkTaskCondition();
-            return n;
+        var data = {
+            "npctalk" : {condition : new NPCTalkTaskCondition()},
+            "killmonster":{condition : new KillMonsterTaskCondition()} 
         }
-        else if (id == "killmonster") {
-            var k = new KillMonsterTaskCondition();
-            return k;
+        // if (id == "npctalk") {
+        //     var n = new NPCTalkTaskCondition();
+        //     return n;
+        // }
+        // else if (id == "killmonster") {
+        //     var k = new KillMonsterTaskCondition();
+        //     return k;
+        // }
+        // else
+        var info = data[id];
+        if (!info) {
+            console.error('missing task')
         }
-        else
-            console.error('missing task condition')
+            return info.condition;
     }
 
     function creatTask(id: string) {
         var data = {
-            "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.UNACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1" },
+            "task_00": { name: "任务01", desc: "点击NPC_1,在NPC_2交任务", total: 1, status: TaskStatus.ACCEPTABLE, condition: "npctalk", fromNpcId: "npc_0", toNpcId: "npc_1" ,preTaskListId : ["null"]},
+            "task_01": { name: "任务02", desc: "点击NPC_2,杀死十只怪物后点NPC_2交任务", total: 10, status: TaskStatus.UNACCEPTABLE, condition: "killmonster", fromNpcId: "npc_1", toNpcId: "npc_1" ,preTaskListId : ["task_00"]},
+
         }
         var info = data[id];
         if (!info) {
             console.error('missing task')
         }
         var condition = this.creatTaskCondition(info.condition);
-        return new Task(id, info.name, info.desc, info.total, info.status, condition, info.fronNpcId, info.toNpcId);
+        return new Task(id, info.name, info.desc, info.total, info.status, condition, info.condition,info.fromNpcId, info.toNpcId,info.preTaskListId);
     }
 
 class TaskPanel extends egret.DisplayObjectContainer implements Observer {
@@ -293,7 +373,7 @@ class TaskPanel extends egret.DisplayObjectContainer implements Observer {
             }
         }
         TaskService.getInstance().getTaskByCustomRule(rule);
-        // this.taskList = rule;
+        //this.taskList = rule;
         // for(var i = 0; i < this.taskList.length; i++){
         //     this.show[i] ="任务名 ：" + this.taskList[i].name + ":\n" +"任务内容："+ this.taskList[i].desc +" :\n" +" 任务状态 ：" + this.taskList[i].status;
         // }
@@ -316,6 +396,7 @@ class TaskPanel extends egret.DisplayObjectContainer implements Observer {
         let rule = (taskList) => {
             for (var taskId in taskList) {
                 this.taskList[i] = taskList[taskId];
+                i++;
             }
         }
         TaskService.getInstance().getTaskByCustomRule(rule);
@@ -323,16 +404,16 @@ class TaskPanel extends egret.DisplayObjectContainer implements Observer {
             if (this.taskList[i].id == task.id) {
                 egret.Tween.get(this).to({ alpha: 1 }, 500);
                 //this.button.touchEnabled = true;
-                if (this.taskList[i].status == TaskStatus.ACCEPTABLE) {
-                    this.ifAccept = true;
-                    var texture: egret.Texture = RES.getRes("jieshou_png");
-                    //this.button.texture = texture;
-                }
-                if (this.taskList[i].status == TaskStatus.CAN_SUBMIT) {
-                    this.ifAccept = false;
-                    var texture: egret.Texture = RES.getRes("wancheng_png");
-                    //this.button.texture = texture;
-                }
+                // if (this.taskList[i].status == TaskStatus.ACCEPTABLE) {
+                //     this.ifAccept = true;
+                //     var texture: egret.Texture = RES.getRes("jieshou_png");
+                //     //this.button.texture = texture;
+                // }
+                // if (this.taskList[i].status == TaskStatus.CAN_SUBMIT) {
+                //     this.ifAccept = false;
+                //     var texture: egret.Texture = RES.getRes("wancheng_png");
+                //     //this.button.texture = texture;
+                // }
                 this.show[i] = "任务名 ：" + this.taskList[i].name + " :\n " + "任务内容：" + this.taskList[i].desc + " :\n " + " 任务状态 ： " + this.taskList[i].status;
                 this.duringTaskId = this.taskList[i].id;
                 this.textField.text = "";
