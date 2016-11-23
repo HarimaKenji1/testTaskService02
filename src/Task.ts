@@ -164,6 +164,10 @@ class NPCTalkTaskCondition implements TaskCondition {
 
 class KillMonsterTaskCondition implements TaskCondition {
     
+    public MonsterList:{
+      [Index : string] : number
+    } = {}
+
     onAccept(task) { }
     onSubmit(task) { }
     getCondition(){
